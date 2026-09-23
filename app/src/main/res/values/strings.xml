@@ -1,0 +1,13 @@
+<resources>
+    <string name="app_name">TimeBoxr</string>
+    <string name="notification_channel_name">Pomodoro timer</string>
+    <string name="notification_channel_description">Shows the running work/break timer and lets you control it from the lock screen</string>
+    <string name="phase_work">Work</string>
+    <string name="phase_break">Break</string>
+    <string name="notification_finished">%1$s session finished</string>
+    <string name="notification_paused">Paused – %1$s left</string>
+    <string name="action_pause">Pause</string>
+    <string name="action_resume">Resume</string>
+    <string name="action_stop">Stop</string>
+    <string name="action_complete">Complete</string>
+</resources>
