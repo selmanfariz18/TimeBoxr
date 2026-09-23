@@ -13,6 +13,7 @@ import android.media.RingtoneManager
 import android.os.Build
 import android.os.CountDownTimer
 import android.os.IBinder
+import android.provider.Settings
 import androidx.core.app.NotificationCompat
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -107,8 +108,31 @@ class TimerService : Service() {
                 )
                 updateNotification()
                 playAlarmSound()
+                launchAlarmActivityDirectly()
             }
         }.start()
+    }
+
+    /**
+     * Belt-and-suspenders alongside the notification's full-screen intent
+     * (which some ROMs, e.g. certain LineageOS builds, never actually grant
+     * through their Settings UI despite the permission being declared).
+     * "Display over other apps" is a much older, more universally supported
+     * special permission that also exempts this call from Android's
+     * background-activity-start restrictions, so if it's granted this will
+     * pop the alarm screen and wake the device even where the full-screen
+     * intent path silently does nothing.
+     */
+    private fun launchAlarmActivityDirectly() {
+        val canLaunch = Build.VERSION.SDK_INT < Build.VERSION_CODES.M || Settings.canDrawOverlays(this)
+        if (!canLaunch) return
+
+        val intent = Intent(this, TimerAlarmActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or
+                Intent.FLAG_ACTIVITY_CLEAR_TOP or
+                Intent.FLAG_ACTIVITY_SINGLE_TOP
+        }
+        runCatching { startActivity(intent) }
     }
 
     private fun pauseTimer() {
@@ -195,22 +219,26 @@ class TimerService : Service() {
             else -> formatTime(state.remainingMillis)
         }
 
-        val openAppIntent = PendingIntent.getActivity(
-            this, 0,
-            Intent(this, MainActivity::class.java),
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
-
         val builder = NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle(phaseLabel)
             .setContentText(contentText)
-            .setContentIntent(openAppIntent)
             .setOngoing(state.runState == TimerRunState.RUNNING || state.runState == TimerRunState.PAUSED)
             .setOnlyAlertOnce(true)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setCategory(NotificationCompat.CATEGORY_ALARM)
+
+        if (state.runState == TimerRunState.FINISHED) {
+            // Wake the screen and pop the Complete/Stop screen over the lock
+            // screen, the same way an alarm clock does, instead of leaving
+            // the user to notice a silent notification.
+            val alarmIntent = alarmActivityPendingIntent()
+            builder.setContentIntent(alarmIntent)
+            builder.setFullScreenIntent(alarmIntent, true)
+        } else {
+            builder.setContentIntent(openAppPendingIntent())
+        }
 
         when (state.runState) {
             TimerRunState.RUNNING -> {
@@ -232,6 +260,24 @@ class TimerService : Service() {
         }
 
         return builder.build()
+    }
+
+    private fun openAppPendingIntent(): PendingIntent = PendingIntent.getActivity(
+        this, 0,
+        Intent(this, MainActivity::class.java),
+        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+    )
+
+    private fun alarmActivityPendingIntent(): PendingIntent {
+        val intent = Intent(this, TimerAlarmActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or
+                Intent.FLAG_ACTIVITY_SINGLE_TOP or
+                Intent.FLAG_ACTIVITY_CLEAR_TOP
+        }
+        return PendingIntent.getActivity(
+            this, 1, intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
     }
 
     private fun servicePendingIntent(action: String): PendingIntent {

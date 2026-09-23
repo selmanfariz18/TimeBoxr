@@ -4,19 +4,17 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
@@ -34,7 +32,11 @@ import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun TimerScreen(viewModel: TimerViewModel) {
+fun TimerScreen(
+    viewModel: TimerViewModel,
+    wakeScreenPermissionGranted: Boolean = true,
+    onRequestWakeScreenPermission: () -> Unit = {}
+) {
     val workMinutes by viewModel.workMinutes.collectAsState()
     val breakMinutes by viewModel.breakMinutes.collectAsState()
     val timerState by viewModel.timerState.collectAsState()
@@ -48,6 +50,10 @@ fun TimerScreen(viewModel: TimerViewModel) {
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(24.dp)
         ) {
+            if (!wakeScreenPermissionGranted) {
+                WakeScreenPermissionBanner(onRequestWakeScreenPermission)
+            }
+
             val phaseLabel = if (timerState.phase == TimerPhase.WORK) "Work" else "Break"
             Text(phaseLabel, style = MaterialTheme.typography.headlineSmall)
 
@@ -114,6 +120,28 @@ fun TimerScreen(viewModel: TimerViewModel) {
 }
 
 @Composable
+private fun WakeScreenPermissionBanner(onRequest: () -> Unit) {
+    Surface(
+        color = MaterialTheme.colorScheme.errorContainer,
+        shape = MaterialTheme.shapes.medium,
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Text(
+                "Screen wake-up is off for the finished-timer alert",
+                style = MaterialTheme.typography.titleSmall
+            )
+            Text(
+                "Needs the \"Display over other apps\" permission, otherwise you'll only hear the alarm sound and the screen won't turn on.",
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.padding(top = 4.dp, bottom = 12.dp)
+            )
+            Button(onClick = onRequest) { Text("Enable in Settings") }
+        }
+    }
+}
+
+@Composable
 private fun DurationStepper(
     label: String,
     value: Int,
@@ -123,11 +151,11 @@ private fun DurationStepper(
     Row(verticalAlignment = Alignment.CenterVertically) {
         Text(label, modifier = Modifier.padding(end = 8.dp))
         IconButton(onClick = { onValueChange(value - 1) }, enabled = enabled) {
-            Icon(Icons.Default.Remove, contentDescription = "Decrease")
+            Text("−", fontSize = 20.sp, fontWeight = FontWeight.Bold)
         }
         Text("$value min", modifier = Modifier.width(64.dp))
         IconButton(onClick = { onValueChange(value + 1) }, enabled = enabled) {
-            Icon(Icons.Default.Add, contentDescription = "Increase")
+            Text("+", fontSize = 20.sp, fontWeight = FontWeight.Bold)
         }
     }
 }

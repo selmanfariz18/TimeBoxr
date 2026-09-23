@@ -14,8 +14,9 @@ keep control of the timer even when your phone is locked.
   time left, with **Pause / Resume** and **Stop** buttons you can tap without
   unlocking the phone.
 - When a work or break timer reaches zero, your phone's default alarm (or
-  notification) sound plays, and the notification switches to a **Complete**
-  button.
+  notification) sound plays, and — like an alarm clock — the screen wakes up
+  and a full-screen Complete/Stop screen pops up over the lock screen, so you
+  don't have to notice a silent notification and unlock the phone yourself.
 - Tapping **Complete** automatically starts the next phase (work → break,
   break → work).
 
