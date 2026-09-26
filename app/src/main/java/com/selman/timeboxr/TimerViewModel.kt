@@ -24,7 +24,22 @@ class TimerViewModel(application: Application) : AndroidViewModel(application) {
     val breakMinutes: StateFlow<Int> = settingsRepository.breakMinutes
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), SettingsRepository.DEFAULT_BREAK_MINUTES)
 
+    val notificationSoundUri: StateFlow<String?> = settingsRepository.notificationSoundUri
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+
+    val playSoundOnBreakComplete: StateFlow<Boolean> = settingsRepository.playSoundOnBreakComplete
+        .stateIn(
+            viewModelScope,
+            SharingStarted.WhileSubscribed(5000),
+            SettingsRepository.DEFAULT_PLAY_SOUND_ON_BREAK_COMPLETE
+        )
+
+    val dailyGoalHours: StateFlow<Int> = settingsRepository.dailyGoalHours
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), SettingsRepository.DEFAULT_DAILY_GOAL_HOURS)
+
     val timerState: StateFlow<TimerUiState> = TimerService.uiState
+
+    val todayTotalMillis: StateFlow<Long> = TimerService.todayTotalMillis
 
     fun setWorkMinutes(minutes: Int) {
         viewModelScope.launch { settingsRepository.setWorkMinutes(minutes) }
@@ -32,6 +47,18 @@ class TimerViewModel(application: Application) : AndroidViewModel(application) {
 
     fun setBreakMinutes(minutes: Int) {
         viewModelScope.launch { settingsRepository.setBreakMinutes(minutes) }
+    }
+
+    fun setNotificationSoundUri(uri: String?) {
+        viewModelScope.launch { settingsRepository.setNotificationSoundUri(uri) }
+    }
+
+    fun setPlaySoundOnBreakComplete(enabled: Boolean) {
+        viewModelScope.launch { settingsRepository.setPlaySoundOnBreakComplete(enabled) }
+    }
+
+    fun setDailyGoalHours(hours: Int) {
+        viewModelScope.launch { settingsRepository.setDailyGoalHours(hours) }
     }
 
     fun start() {

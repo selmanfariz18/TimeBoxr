@@ -10,14 +10,25 @@ import android.content.pm.ServiceInfo
 import android.media.AudioAttributes
 import android.media.Ringtone
 import android.media.RingtoneManager
+import android.net.Uri
 import android.os.Build
 import android.os.CountDownTimer
+import android.os.Handler
 import android.os.IBinder
+import android.os.Looper
+import android.os.VibrationEffect
+import android.os.Vibrator
+import android.os.VibratorManager
 import android.provider.Settings
 import androidx.core.app.NotificationCompat
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 import java.util.Locale
 
 /**
@@ -34,6 +45,12 @@ class TimerService : Service() {
         private const val CHANNEL_ID = "timeboxr_timer"
         private const val NOTIFICATION_ID = 1001
 
+        /** An unattended alarm rings for at most this long, then goes quiet on its own. */
+        private const val MAX_RING_MILLIS = 60_000L
+
+        /** How often accumulated running time is written to disk. */
+        private const val FLUSH_INTERVAL_MILLIS = 10_000L
+
         const val ACTION_START = "com.selman.timeboxr.action.START"
         const val ACTION_PAUSE = "com.selman.timeboxr.action.PAUSE"
         const val ACTION_RESUME = "com.selman.timeboxr.action.RESUME"
@@ -45,17 +62,29 @@ class TimerService : Service() {
 
         private val _uiState = MutableStateFlow(TimerUiState())
         val uiState: StateFlow<TimerUiState> = _uiState.asStateFlow()
+
+        private val _todayTotalMillis = MutableStateFlow(0L)
+        val todayTotalMillis: StateFlow<Long> = _todayTotalMillis.asStateFlow()
     }
 
     private var countDownTimer: CountDownTimer? = null
     private var ringtone: Ringtone? = null
+    private val ringtoneStopHandler = Handler(Looper.getMainLooper())
 
     private var workMinutes = SettingsRepository.DEFAULT_WORK_MINUTES
     private var breakMinutes = SettingsRepository.DEFAULT_BREAK_MINUTES
 
+    private lateinit var settingsRepository: SettingsRepository
+    private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private var unflushedElapsedMillis = 0L
+
     override fun onCreate() {
         super.onCreate()
         createNotificationChannel()
+        settingsRepository = SettingsRepository(this)
+        serviceScope.launch {
+            _todayTotalMillis.value = settingsRepository.todayTotalMillis.first()
+        }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -99,6 +128,7 @@ class TimerService : Service() {
             override fun onTick(millisUntilFinished: Long) {
                 _uiState.value = _uiState.value.copy(remainingMillis = millisUntilFinished)
                 updateNotification()
+                accumulateElapsed(1000L)
             }
 
             override fun onFinish() {
@@ -107,7 +137,9 @@ class TimerService : Service() {
                     runState = TimerRunState.FINISHED
                 )
                 updateNotification()
-                playAlarmSound()
+                flushElapsed()
+                vibrateForAlarm()
+                maybePlayAlarmSound()
                 launchAlarmActivityDirectly()
             }
         }.start()
@@ -138,6 +170,7 @@ class TimerService : Service() {
     private fun pauseTimer() {
         if (_uiState.value.runState != TimerRunState.RUNNING) return
         countDownTimer?.cancel()
+        flushElapsed()
         _uiState.value = _uiState.value.copy(runState = TimerRunState.PAUSED)
         updateNotification()
     }
@@ -152,6 +185,7 @@ class TimerService : Service() {
     private fun stopTimer() {
         countDownTimer?.cancel()
         stopRingtone()
+        flushElapsed()
         val resetMillis = workMinutes * 60_000L
         _uiState.value = TimerUiState(
             phase = TimerPhase.WORK,
@@ -163,8 +197,49 @@ class TimerService : Service() {
         stopSelf()
     }
 
-    private fun playAlarmSound() {
-        val uri = RingtoneManager.getActualDefaultRingtoneUri(this, RingtoneManager.TYPE_ALARM)
+    /** Tracks running (work+break) time for the day, flushing to disk periodically. */
+    private fun accumulateElapsed(deltaMillis: Long) {
+        _todayTotalMillis.value += deltaMillis
+        unflushedElapsedMillis += deltaMillis
+        if (unflushedElapsedMillis >= FLUSH_INTERVAL_MILLIS) {
+            flushElapsed()
+        }
+    }
+
+    private fun flushElapsed() {
+        if (unflushedElapsedMillis <= 0L) return
+        val toFlush = unflushedElapsedMillis
+        unflushedElapsedMillis = 0L
+        serviceScope.launch { settingsRepository.addElapsedTodayMillis(toFlush) }
+    }
+
+    private fun vibrateForAlarm() {
+        val vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            getSystemService(VibratorManager::class.java)?.defaultVibrator
+        } else {
+            @Suppress("DEPRECATION")
+            getSystemService(Vibrator::class.java)
+        } ?: return
+
+        val pattern = longArrayOf(0, 400, 200, 400, 200, 400)
+        vibrator.vibrate(VibrationEffect.createWaveform(pattern, -1))
+    }
+
+    /** Work always alerts with sound; break only does if the user opted in. */
+    private fun maybePlayAlarmSound() {
+        serviceScope.launch {
+            val phase = _uiState.value.phase
+            val shouldPlaySound = phase == TimerPhase.WORK || settingsRepository.playSoundOnBreakComplete.first()
+            if (shouldPlaySound) {
+                val customUri = settingsRepository.notificationSoundUri.first()
+                playAlarmSound(customUri)
+            }
+        }
+    }
+
+    private fun playAlarmSound(customUriString: String?) {
+        val uri = customUriString?.let { Uri.parse(it) }
+            ?: RingtoneManager.getActualDefaultRingtoneUri(this, RingtoneManager.TYPE_ALARM)
             ?: RingtoneManager.getActualDefaultRingtoneUri(this, RingtoneManager.TYPE_NOTIFICATION)
             ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
 
@@ -175,9 +250,16 @@ class TimerService : Service() {
                 .build()
             play()
         }
+
+        // If nobody's there to dismiss it (Complete/Stop), don't let it ring
+        // forever — go quiet on its own after a while. The timer itself stays
+        // in FINISHED, waiting for Complete/Stop, whenever you get back to it.
+        ringtoneStopHandler.removeCallbacksAndMessages(null)
+        ringtoneStopHandler.postDelayed({ stopRingtone() }, MAX_RING_MILLIS)
     }
 
     private fun stopRingtone() {
+        ringtoneStopHandler.removeCallbacksAndMessages(null)
         ringtone?.stop()
         ringtone = null
     }
@@ -302,6 +384,7 @@ class TimerService : Service() {
     override fun onDestroy() {
         countDownTimer?.cancel()
         stopRingtone()
+        flushElapsed()
         super.onDestroy()
     }
 }

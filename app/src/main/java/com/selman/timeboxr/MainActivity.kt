@@ -13,8 +13,10 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.core.content.ContextCompat
+import com.selman.timeboxr.ui.SettingsScreen
 import com.selman.timeboxr.ui.TimerScreen
 import com.selman.timeboxr.ui.theme.TimeBoxrTheme
 
@@ -36,11 +38,20 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             TimeBoxrTheme {
-                TimerScreen(
-                    viewModel = viewModel,
-                    wakeScreenPermissionGranted = wakeScreenPermissionGranted,
-                    onRequestWakeScreenPermission = { openOverlaySettings() }
-                )
+                var showSettings by remember { mutableStateOf(false) }
+                if (showSettings) {
+                    SettingsScreen(
+                        viewModel = viewModel,
+                        onBack = { showSettings = false }
+                    )
+                } else {
+                    TimerScreen(
+                        viewModel = viewModel,
+                        wakeScreenPermissionGranted = wakeScreenPermissionGranted,
+                        onRequestWakeScreenPermission = { openOverlaySettings() },
+                        onOpenSettings = { showSettings = true }
+                    )
+                }
             }
         }
     }

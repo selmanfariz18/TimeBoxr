@@ -13,19 +13,31 @@ keep control of the timer even when your phone is locked.
 - An ongoing, lock-screen-visible notification shows the running phase and
   time left, with **Pause / Resume** and **Stop** buttons you can tap without
   unlocking the phone.
-- When a work or break timer reaches zero, your phone's default alarm (or
-  notification) sound plays, and — like an alarm clock — the screen wakes up
-  and a full-screen Complete/Stop screen pops up over the lock screen, so you
-  don't have to notice a silent notification and unlock the phone yourself.
+- When a work or break timer reaches zero, an alarm sound plays (see
+  **Settings** below for break-specific behavior), and — like an alarm
+  clock — the screen wakes up and a full-screen Complete/Stop screen pops up
+  over the lock screen, so you don't have to notice a silent notification and
+  unlock the phone yourself. The alarm auto-stops after 60 seconds if you're
+  away from your phone, instead of ringing indefinitely.
 - Tapping **Complete** automatically starts the next phase (work → break,
   break → work).
+- **Settings screen** (gear icon, top right):
+  - Pick a custom alert sound for TimeBoxr from any ringtone/notification
+    sound on your phone. This only changes TimeBoxr's own alert — it does not
+    touch your phone's system alarm sound.
+  - Toggle whether a finished **break** plays that sound at all — off by
+    default, so a break ending only vibrates; a finished **work** session
+    always alerts.
+  - Set a daily goal (in hours, default 8, matching a typical workday).
+- **Daily time tracker**: the bottom of the main screen shows today's total
+  work + break time against your daily goal, with a progress bar. Resets
+  automatically at midnight.
 
 ## Ideas for later (not built yet)
 
-- Daily/weekly session stats.
-- Custom sound picker instead of the system default.
 - Long break after N pomodoros.
 - Home-screen widget.
+- Weekly/monthly history (today's tracker only keeps the current day).
 
 (Add more here as they come up — this file is a good place to track them.)
 
@@ -69,7 +81,11 @@ app/src/main/java/com/selman/timeboxr/
 2. Connect your physical device over USB with USB debugging enabled, and
    select it as the run target.
 3. Run the app. On first launch it will ask for notification permission
-   (needed to show the lock-screen timer) — allow it.
+   (needed to show the lock-screen timer) — allow it. On Android 14+ you'll
+   also see a banner in the app saying screen wake-up is off — tap
+   **Enable in Settings** and turn it on there (Android requires this to be
+   granted manually per-app; it can't be requested with a normal permission
+   prompt).
 4. **Recommended:** exempt the app from battery optimization
    (Settings → Apps → TimeBoxr → Battery → Unrestricted). Without this,
    Android may occasionally delay the countdown or kill the service on some

@@ -3,6 +3,7 @@ package com.selman.timeboxr.ui
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -11,6 +12,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
@@ -35,13 +37,27 @@ import java.util.Locale
 fun TimerScreen(
     viewModel: TimerViewModel,
     wakeScreenPermissionGranted: Boolean = true,
-    onRequestWakeScreenPermission: () -> Unit = {}
+    onRequestWakeScreenPermission: () -> Unit = {},
+    onOpenSettings: () -> Unit = {}
 ) {
     val workMinutes by viewModel.workMinutes.collectAsState()
     val breakMinutes by viewModel.breakMinutes.collectAsState()
     val timerState by viewModel.timerState.collectAsState()
+    val todayTotalMillis by viewModel.todayTotalMillis.collectAsState()
+    val dailyGoalHours by viewModel.dailyGoalHours.collectAsState()
 
-    Scaffold(topBar = { TopAppBar(title = { Text("TimeBoxr") }) }) { padding ->
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("TimeBoxr") },
+                actions = {
+                    IconButton(onClick = onOpenSettings) {
+                        Text("⚙", fontSize = 20.sp)
+                    }
+                }
+            )
+        }
+    ) { padding ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -115,7 +131,33 @@ fun TimerScreen(
                     style = MaterialTheme.typography.bodySmall
                 )
             }
+
+            Spacer(modifier = Modifier.weight(1f))
+
+            DailyGoalSummary(todayTotalMillis = todayTotalMillis, goalHours = dailyGoalHours)
         }
+    }
+}
+
+@Composable
+private fun DailyGoalSummary(todayTotalMillis: Long, goalHours: Int) {
+    val goalMillis = goalHours * 3_600_000L
+    val fraction = if (goalMillis > 0) (todayTotalMillis.toFloat() / goalMillis).coerceIn(0f, 1f) else 0f
+    val totalMinutes = todayTotalMillis / 60_000L
+    val hours = totalMinutes / 60
+    val minutes = totalMinutes % 60
+
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Text(
+            "Today: ${hours}h ${minutes}m of ${goalHours}h goal",
+            style = MaterialTheme.typography.bodyMedium
+        )
+        LinearProgressIndicator(
+            progress = fraction,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 6.dp)
+        )
     }
 }
 
