@@ -62,13 +62,16 @@ Native. The reasoning:
 
 ```
 app/src/main/java/com/selman/timeboxr/
-  TimerService.kt        Foreground service: countdown, notification, alarm sound
+  TimerService.kt         Foreground service: countdown, notification, alarm
+                          sound + vibration, auto-stop, daily time tracking
   TimerViewModel.kt       Bridges the UI to the service
-  SettingsRepository.kt   Persists work/break minutes (DataStore)
+  SettingsRepository.kt   Persists settings + today's tracked time (DataStore)
+  TimerAlarmActivity.kt   Full-screen Complete/Stop screen shown over the lock screen
   TimerPhase.kt           Enums + the shared timer state shape
-  MainActivity.kt         Hosts the Compose UI, requests notification permission
-  ui/TimerScreen.kt        The screen itself
-  ui/theme/                Material 3 theme
+  MainActivity.kt         Hosts the Compose UI, requests permissions
+  ui/TimerScreen.kt       The main timer screen + daily goal summary
+  ui/SettingsScreen.kt    Sound picker, break-vibration toggle, daily goal
+  ui/theme/               Material 3 theme
 ```
 
 ## Getting it running on your device
